@@ -3,7 +3,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-import numpy as np
+import base64
+import io
 
 # Configure page
 st.set_page_config(
@@ -13,11 +14,33 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+#background image
+def set_background(image_path):
+    with open(image_path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode()
+    st.markdown(f"""
+        <style>
+        .stApp {{
+            background-image: url("data:image/jpg;base64,{encoded}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        .main {{
+            background-color: rgba(248, 249, 250, 0.85);
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+set_background("Background.jpg")
+
 # Add custom CSS for professional styling
 st.markdown("""
     <style>
     .main {
         background-color: #f8f9fa;
+    }
+    section[data-testid="stSidebar"] {
+    background-color: rgba(0, 0, 0, 0.65) !important;
     }
     .metric-card {
         background-color: white;
@@ -41,63 +64,53 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# DATA GENERATION
+# DATA GATHERED
 # ============================================================================
 
-def generate_sample_data(n_records=150):
-    """Generate comprehensive sample dataset for STI Knowledge research"""
-    np.random.seed(42)
+@st.dialog("📂 Upload Your Data File")
+def upload_dialog():
+    st.markdown("""
+    ### Instructions
+    **Your file must have these exact column names:**
     
-    respondent_ids = [f"{i:04d}" for i in range(1, n_records + 1)]
-    ages = np.random.randint(15, 35, n_records)
-    genders = np.random.choice(['Male', 'Female'], n_records, p=[0.48, 0.52])
+    | Column | Description | Example |
+    |---|---|---|
+    | `Age` | Age in years | 22 |
+    | `Gender` | Male or Female | Female |
+    | `Knowledge_Score` | Score 0-100 | 75.5 |
+    | `Knowledge_Level` | Have / Moderate / Least Knowledge | Have Knowledge |
+    | `Information_Source` | Source of info | Social Media |
     
-    # Knowledge levels based on age and gender (with some realistic patterns)
-    knowledge_levels = []
-    knowledge_scores = []
+    **Accepted formats:** `.csv` or `.xlsx`
+    """)
     
-    for age, gender in zip(ages, genders):
-        # Older respondents and females tend to have better knowledge
-        base_score = 40 + (age - 15) * 2 + (10 if gender == 'Female' else 0)
-        noise = np.random.normal(0, 15)
-        score = np.clip(base_score + noise, 0, 100)
-        knowledge_scores.append(score)
-        
-        if score >= 70:
-            knowledge_levels.append('Have Knowledge')
-        elif score >= 40:
-            knowledge_levels.append('Moderate Knowledge')
-        else:
-            knowledge_levels.append('Least Knowledge')
-    
-    # Information sources
-    info_sources = np.random.choice(
-        ['Social Media', 'Health Workers', 'Peers', 'Educational Programs', 'Family'],
-        n_records,
-        p=[0.30, 0.25, 0.20, 0.15, 0.10]
+    uploaded_file = st.file_uploader(
+        "Choose your file",
+        type=["csv", "xlsx", "xls"]
     )
     
-    # Age groups
-    age_groups = pd.cut(ages, bins=[14, 19, 24, 29, 34], 
-                        labels=['15-19', '20-24', '25-29', '30-34'])
-    
-    df = pd.DataFrame({
-        'Respondent_ID': respondent_ids,
-        'Age': ages,
-        'Gender': genders,
-        'Age_Group': age_groups,
-        'Knowledge_Score': knowledge_scores,
-        'Knowledge_Level': knowledge_levels,
-        'Information_Source': info_sources
-    })
-    
-    return df
+    if uploaded_file is not None:
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
+            
+        df.insert(0, 'Respondent_ID', [f"{i:04d}" for i in range(1, len(df) + 1)])
+        st.session_state['data'] = df
+        st.success(f"✅ Successfully loaded {len(df)} records!")
+        st.rerun()
 
-# ============================================================================
-# LOAD DATA
-# ============================================================================
+# Sidebar upload button
+st.sidebar.markdown("### 📂 Data Source")
+if st.sidebar.button("📤 Upload Data File"):
+    upload_dialog()
 
-df = generate_sample_data(150)
+# Load data from session or show warning
+if 'data' in st.session_state:
+    df = st.session_state['data']
+else:
+    st.warning("⬆️ Please upload a data file using the button in the sidebar to begin.")
+    st.stop()
 
 # ============================================================================
 # HEADER
@@ -137,10 +150,11 @@ with filter_col1:
 with filter_col2:
     selected_age_group = st.multiselect(
         "Select Age Group",
-        options=sorted(df['Age_Group'].dropna().unique()),
-        default=sorted(df['Age_Group'].dropna().unique()),
+        options=['17-20', '21-25'],
+        default=['17-20', '21-25'],
         key="age_filter"
     )
+
 
 with filter_col3:
     selected_knowledge = st.multiselect(
@@ -158,6 +172,9 @@ with filter_col4:
         key="source_filter"
     )
 
+df['Age_Group'] = pd.cut(df['Age'],
+                        bins=[16, 20, 25],
+                        labels=['17-20', '21-25'])
 # Apply filters
 filtered_df = df[
     (df['Gender'].isin(selected_gender)) &
@@ -191,7 +208,6 @@ display_df_renamed = display_df.rename(columns={
     'Respondent_ID': 'ID',
     'Age': 'Age',
     'Gender': 'Gender',
-    'Age_Group': 'Age Grp',
     'Knowledge_Score': 'Score',
     'Knowledge_Level': 'Knowledge',
     'Information_Source': 'Info Source'
@@ -212,15 +228,106 @@ st.sidebar.dataframe(
 
 st.sidebar.divider()
 
-# Download option in sidebar
-csv = display_df.to_csv(index=False)
+# ============================================================================
+# SIDEBAR - DOWNLOAD REPORT
+# ============================================================================
+
+st.sidebar.markdown("### 📥 Download Report")
+
+# Build summary report data
+male_avg = filtered_df[filtered_df['Gender'] == 'Male']['Knowledge_Score'].mean()
+female_avg = filtered_df[filtered_df['Gender'] == 'Female']['Knowledge_Score'].mean()
+highest_gender = 'Male' if male_avg > female_avg else 'Female'
+lowest_gender = 'Female' if male_avg > female_avg else 'Male'
+
+age_group_counts = filtered_df['Age_Group'].value_counts()
+majority_age = age_group_counts.idxmax() if len(age_group_counts) > 0 else 'N/A'
+
+knowledge_dist = filtered_df['Knowledge_Level'].value_counts()
+
+summary_data = {
+    'Report Item': [
+        '--- GENERAL ---',
+        'Total Respondents',
+        'Majority Age Group',
+        'Average Age',
+        '',
+        '--- KNOWLEDGE SCORE ---',
+        'Overall Average Score',
+        'Standard Deviation',
+        'Highest Score',
+        'Lowest Score',
+        '',
+        '--- KNOWLEDGE LEVEL ---',
+        'Have Knowledge',
+        'Moderate Knowledge',
+        'Least Knowledge',
+        '',
+        '--- GENDER ANALYSIS ---',
+        'Male Average Score',
+        'Female Average Score',
+        'Highest Knowledge Gender',
+        'Lowest Knowledge Gender',
+        '',
+        '--- INFORMATION SOURCE ---',
+    ],
+    'Value': [
+        '',
+        len(filtered_df),
+        str(majority_age),
+        round(filtered_df['Age'].mean(), 1),
+        '',
+        '',
+        round(filtered_df['Knowledge_Score'].mean(), 1),
+        round(filtered_df['Knowledge_Score'].std(), 2),
+        round(filtered_df['Knowledge_Score'].max(), 1),
+        round(filtered_df['Knowledge_Score'].min(), 1),
+        '',
+        '',
+        knowledge_dist.get('Have Knowledge', 0),
+        knowledge_dist.get('Moderate Knowledge', 0),
+        knowledge_dist.get('Least Knowledge', 0),
+        '',
+        '',
+        round(male_avg, 1) if not pd.isna(male_avg) else 'N/A',
+        round(female_avg, 1) if not pd.isna(female_avg) else 'N/A',
+        highest_gender,
+        lowest_gender,
+        '',
+        '',
+    ]
+}
+
+# Add information sources dynamically
+source_dist = filtered_df['Information_Source'].value_counts()
+for source, count in source_dist.items():
+    pct = round((count / len(filtered_df) * 100), 1)
+    summary_data['Report Item'].append(source)
+    summary_data['Value'].append(f"{count} ({pct}%)")
+
+report_df = pd.DataFrame(summary_data)
+
+# CSV download
+csv_report = report_df.to_csv(index=False)
 st.sidebar.download_button(
-    label="📥 Download Data (CSV)",
-    data=csv,
-    file_name=f"STI_Data_{datetime.now().strftime('%Y%m%d')}.csv",
+    label="📥 Download Report (CSV)",
+    data=csv_report,
+    file_name=f"STI_Summary_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
     mime="text/csv"
 )
 
+# Excel download
+excel_buffer = io.BytesIO()
+with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+    report_df.to_excel(writer, sheet_name='Summary Report', index=False)
+
+st.sidebar.download_button(
+    label="📊 Download Report (Excel)",
+    data=excel_buffer.getvalue(),
+    file_name=f"STI_Summary_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+########################################
 # ============================================================================
 # MAIN LAYOUT - VISUALIZATIONS & STATISTICS
 # ============================================================================
@@ -463,8 +570,7 @@ Female: Sum of Female scores / Female count
     
     # Age Group Analysis
     st.markdown("#### By Age Group")
-    age_means = filtered_df.groupby('Age_Group')['Knowledge_Score'].mean().round(1)
-    
+    age_means = filtered_df.groupby('Age_Group', observed=True)['Knowledge_Score'].mean().round(1)
     for age_group, score in age_means.items():
         st.metric(f"Age {age_group}", f"{score:.1f}", delta=None)
     
@@ -474,10 +580,9 @@ Female: Sum of Female scores / Female count
     st.markdown("#### Primary Information Sources")
     source_dist = filtered_df['Information_Source'].value_counts()
     
-    for source, count in source_dist.head(3).items():
+    for source, count in source_dist.head(4).items():
         pct = (count / total_respondents * 100) if total_respondents > 0 else 0
         st.write(f"**{source}:** {count} ({pct:.1f}%)")
-
 # ============================================================================
 # FOOTER
 # ============================================================================
