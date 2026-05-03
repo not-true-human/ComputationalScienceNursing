@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
+import plotly.io as pio
 from plotly.subplots import make_subplots
 from scipy import stats
 
@@ -116,8 +117,8 @@ details { background: rgba(255,255,255,0.05); border-radius: 8px; }
 
 set_background_image("Background.jpg")
 
-PLOT_BG    = "rgba(0,0,0,0)"
-PAPER_BG   = "rgba(0,0,0,0)"
+PLOT_BG    = "#0a0a2e"
+PAPER_BG   = "#0a0a2e"
 FONT_CLR   = "white"
 MALE_CLR   = "#4A90D9"
 FEMALE_CLR = "#E05C8A"
@@ -127,6 +128,15 @@ PLOTLY_CONFIG = {
     "modeBarButtonsToAdd": ["zoom2d", "pan2d", "select2d", "lasso2d"],
     "displaylogo": False,
 }
+
+# Lock a Plotly template so colors/backgrounds are deterministic on Streamlit Cloud
+pio.templates["sti_dark"] = go.layout.Template(layout=go.Layout(
+    plot_bgcolor=PLOT_BG,
+    paper_bgcolor=PAPER_BG,
+    font=dict(color=FONT_CLR),
+    colorway=[MALE_CLR, FEMALE_CLR]
+))
+pio.templates.default = "sti_dark"
 
 def dark_layout(**kwargs):
     base = dict(
@@ -394,14 +404,14 @@ with tab1:
         fig_bubble = go.Figure()
         fig_bubble.add_trace(go.Scatter(
             x=male_b['Age'], y=[1.2]*len(male_b), mode='markers+text',
-            marker=dict(size=male_b['Count']*18, color=MALE_CLR, opacity=0.75, line=dict(color='white',width=1)),
+            marker=dict(size=male_b['Count']*18, color=MALE_CLR, opacity=1, line=dict(color='white',width=1)),
             text=male_b['Count'], textposition='middle center',
             textfont=dict(color='white',size=11,family='Arial Black'), name='Male',
             hovertemplate='Age %{x} | Male: %{text}<extra></extra>'
         ))
         fig_bubble.add_trace(go.Scatter(
             x=female_b['Age'], y=[0.8]*len(female_b), mode='markers+text',
-            marker=dict(size=female_b['Count']*18, color=FEMALE_CLR, opacity=0.75, line=dict(color='white',width=1)),
+            marker=dict(size=female_b['Count']*18, color=FEMALE_CLR, opacity=1, line=dict(color='white',width=1)),
             text=female_b['Count'], textposition='middle center',
             textfont=dict(color='white',size=11,family='Arial Black'), name='Female',
             hovertemplate='Age %{x} | Female: %{text}<extra></extra>'
@@ -409,7 +419,7 @@ with tab1:
         fig_bubble.update_layout(**dark_layout(height=520, margin=dict(l=40, r=20, t=50, b=80)), title='Male (top row) vs Female (bottom row) per Age', title_font_size=12, dragmode='zoom')
         fig_bubble.update_xaxes(title='Age', tickvals=list(range(18,26)))
         fig_bubble.update_yaxes(visible=False, range=[0.2,1.8])
-        st.plotly_chart(fig_bubble, use_container_width=True, config=PLOTLY_CONFIG)
+        st.plotly_chart(fig_bubble, width='stretch', config=PLOTLY_CONFIG)
 
     with col_right:
         st.markdown("#### ⚤ Sex Split")
@@ -420,7 +430,7 @@ with tab1:
             textinfo='label+percent',
         ))
         fig_donut.update_layout(**dark_layout(height=230, margin=dict(l=10,r=10,t=10,b=10)))
-        st.plotly_chart(fig_donut, use_container_width=True)
+        st.plotly_chart(fig_donut, width='stretch')
 
         st.markdown("#### 🏅 Knowledge Level")
         kl_order  = ['Highly Knowledgeable','Knowledgeable','Somewhat Knowledgeable','Not Knowledgeable']
@@ -431,7 +441,7 @@ with tab1:
             marker_color=kl_colors, text=kl_cnt.values, textposition='outside',
         ))
         fig_kl.update_layout(**dark_layout(height=230, margin=dict(l=10,r=40,t=10,b=30)), xaxis_title='Count')
-        st.plotly_chart(fig_kl, use_container_width=True)
+        st.plotly_chart(fig_kl, width='stretch')
 
     st.divider()
 
@@ -450,7 +460,7 @@ with tab1:
                     text=ct[gender], textposition='outside',
                 ))
         fig_gk.update_layout(**dark_layout(height=300, barmode='group'))
-        st.plotly_chart(fig_gk, use_container_width=True)
+        st.plotly_chart(fig_gk, width='stretch')
 
     with c2:
         st.markdown("#### 📈 Age vs Overall Score")
@@ -471,7 +481,7 @@ with tab1:
         # ensure the x-axis shows each age from 18 through 25 (add 25 after 24)
         fig_sc.update_xaxes(tickmode='array', tickvals=list(range(18, 26)))
         fig_sc.update_traces(marker=dict(size=10,line=dict(width=1,color='white')), selector=dict(mode='markers'))
-        st.plotly_chart(fig_sc, use_container_width=True, config=PLOTLY_CONFIG)
+        st.plotly_chart(fig_sc, width='stretch', config=PLOTLY_CONFIG)
 
     st.divider()
     st.markdown("#### 🌡️ Score Heatmap — Age Group × Gender")
@@ -483,7 +493,7 @@ with tab1:
         colorbar=dict(tickfont=dict(color='white'), title=dict(text='Score',font=dict(color='white')))
     ))
     fig_heat.update_layout(**dark_layout(height=220))
-    st.plotly_chart(fig_heat, use_container_width=True)
+    st.plotly_chart(fig_heat, width='stretch')
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -557,7 +567,7 @@ with tab2:
 
                 fig.update_layout(**dark_layout(height=320, barmode='group', yaxis=dict(range=[0,4.8])),
                                   title=f'{tname} — Indicator Means', title_font_size=12)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
 
                 # Indicator description table
                 rows_html = "".join(
@@ -629,7 +639,7 @@ with tab2:
         fig_summary.add_hline(y=threshold, line_dash="dot", line_color=color, line_width=1)
     fig_summary.update_layout(**dark_layout(height=380, barmode='group', yaxis=dict(range=[0,4.5])),
         title='Average Score per STI Knowledge Group by Gender')
-    st.plotly_chart(fig_summary, use_container_width=True)
+    st.plotly_chart(fig_summary, width='stretch')
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -761,7 +771,7 @@ with tab3:
             fig_ant_sum.add_hline(y=threshold, line_dash="dot", line_color=color, line_width=1)
         fig_ant_sum.update_layout(**dark_layout(height=380, barmode='group', yaxis=dict(range=[0,4.5])),
             title='Antecedent Factor Averages by Gender')
-        st.plotly_chart(fig_ant_sum, use_container_width=True)
+        st.plotly_chart(fig_ant_sum, width='stretch')
 
         # Horizontal grouped bar chart (replacing radar)
         st.markdown("#### 📊 Factor Comparison — Male vs Female (Table 12)")
@@ -799,7 +809,7 @@ with tab3:
             title='Antecedent Factor Means by Gender — Table 12',
             title_font_size=13,
         )
-        st.plotly_chart(fig_hbar, use_container_width=True)
+        st.plotly_chart(fig_hbar, width='stretch')
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -909,7 +919,7 @@ with tab4:
             fig_t.add_hline(y=threshold, line_dash="dot", line_color=color, line_width=1)
         fig_t.update_layout(**dark_layout(height=420, barmode='group', yaxis=dict(range=[0,4.8])),
             title='Gender Comparison of Means — All Domains')
-        st.plotly_chart(fig_t, use_container_width=True)
+        st.plotly_chart(fig_t, width='stretch')
 
         st.divider()
 
@@ -927,7 +937,7 @@ with tab4:
                         annotation_position="right", annotation_font_color="#f39c12")
         fig_p.update_layout(**dark_layout(height=360, yaxis=dict(range=[0, max(ttest_df['p'])+0.1])),
             title='P-Values by Domain (Red = Significant Difference, Green = No Significant Difference)')
-        st.plotly_chart(fig_p, use_container_width=True)
+        st.plotly_chart(fig_p, width='stretch')
 
         st.divider()
         st.markdown("""
@@ -1010,7 +1020,7 @@ with tab6:
     display = display.assign(**{c: display[c].round(2) for c in round_cols if c in display.columns})
 
     st.dataframe(
-        display.sort_values('ID'), use_container_width=True, height=420,
+        display.sort_values('ID'), width='stretch', height=420,
         column_config={
             'Overall': st.column_config.ProgressColumn('Overall', min_value=1, max_value=4, format='%.2f')
         }
