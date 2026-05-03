@@ -4,4 +4,4 @@ plotly
 numpy
 scipy
 Pillow
-openpyxl
+
