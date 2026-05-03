@@ -232,10 +232,45 @@ def interp_label(mean):
 @st.cache_data
 def load_data(uploaded_file):
     df = pd.read_excel(uploaded_file, sheet_name="50 Respondnets ", header=1)
-    df.columns = df.iloc[0].tolist()
-    df = df.iloc[1:].reset_index(drop=True)
-    df = df[pd.to_numeric(df['Respondents '], errors='coerce').notna()].copy()
-    df = df.rename(columns={'Respondents ': 'ID'})
+
+    # Promote second header row if present and reset index
+    if not df.empty:
+        df.columns = df.iloc[0].astype(str).tolist()
+        df = df.iloc[1:].reset_index(drop=True)
+
+    # Sanitize column names: strip whitespace, collapse inner spaces, and make unique by suffixing duplicates
+    new_cols = []
+    seen = {}
+    for col in df.columns:
+        col_str = '' if pd.isna(col) else str(col)
+        col_clean = " ".join(col_str.strip().split())
+        if col_clean == '':
+            col_clean = 'unnamed'
+        if col_clean in seen:
+            seen[col_clean] += 1
+            col_final = f"{col_clean}.{seen[col_clean]}"
+        else:
+            seen[col_clean] = 0
+            col_final = col_clean
+        new_cols.append(col_final)
+    df.columns = new_cols
+
+    # Normalize Respondents/ID column name (handle 'Respondents ', 'Respondent', etc.)
+    id_col = None
+    for c in df.columns:
+        if c.lower().startswith('respondent'):
+            id_col = c
+            break
+    if id_col:
+        df = df.rename(columns={id_col: 'ID'})
+
+    # Drop rows that don't look like respondent rows (require numeric ID if available, else numeric Age)
+    if 'ID' in df.columns:
+        df = df[pd.to_numeric(df['ID'], errors='coerce').notna()].copy()
+    elif 'Age' in df.columns:
+        df = df[pd.to_numeric(df['Age'], errors='coerce').notna()].copy()
+    else:
+        st.warning("Uploaded file missing expected ID/Age columns; data may be malformed.")
 
     sti_cols = ['CT1','CT2','CT3','CT4','CT5','CT6',
                 'SS1','SS2','SS3','SS4','SS5','SS6',
