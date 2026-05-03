@@ -1,3 +1,6 @@
+import base64
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -14,16 +17,64 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def set_background_image(image_file):
+    image_path = Path(image_file)
+    if not image_path.is_absolute():
+        image_path = Path(__file__).parent / image_path
+
+    if not image_path.exists():
+        st.warning(f"Background image not found: {image_path}")
+        return
+
+    image_ext = image_path.suffix.lstrip(".").lower() or "jpg"
+    encoded_image = base64.b64encode(image_path.read_bytes()).decode()
+
+    st.markdown(
+        f"""
+<style>
+.stApp {{
+    background-image:
+        linear-gradient(rgba(10, 10, 46, 0.82), rgba(10, 10, 46, 0.9)),
+        url("data:image/{image_ext};base64,{encoded_image}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}}
+.main,
+[data-testid="stAppViewContainer"],
+[data-testid="stHeader"] {{
+    background: transparent !important;
+}}
+</style>
+""",
+        unsafe_allow_html=True
+    )
+
 # ── Global CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+/* Glassmorphism sidebar */
 section[data-testid="stSidebar"] {
-    background-color: rgba(0, 0, 128, 0.92) !important;
+    background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)) !important;
     color: white !important;
+    backdrop-filter: blur(12px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(120%) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.37) !important;
+    border-radius: 14px !important;
+    padding: 16px !important;
+    margin: 8px !important;
 }
+
+/* Ensure inner elements remain legible */
 section[data-testid="stSidebar"] * { color: white !important; }
 section[data-testid="stSidebar"] .stSelectbox label,
 section[data-testid="stSidebar"] .stMultiSelect label { color: white !important; }
+
+/* Let the app background show through the glass */
+[data-testid="stAppViewContainer"] > div:first-child > div { background: transparent !important; }
+
 .stApp { background-color: #0a0a2e; }
 .main  { background-color: #0a0a2e; }
 div[data-testid="metric-container"] {
@@ -63,11 +114,19 @@ details { background: rgba(255,255,255,0.05); border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
+set_background_image("Background.jpg")
+
 PLOT_BG    = "rgba(0,0,0,0)"
 PAPER_BG   = "rgba(0,0,0,0)"
 FONT_CLR   = "white"
 MALE_CLR   = "#4A90D9"
 FEMALE_CLR = "#E05C8A"
+PLOTLY_CONFIG = {
+    "scrollZoom": True,
+    "displayModeBar": True,
+    "modeBarButtonsToAdd": ["zoom2d", "pan2d", "select2d", "lasso2d"],
+    "displaylogo": False,
+}
 
 def dark_layout(**kwargs):
     base = dict(
@@ -312,11 +371,10 @@ with tab1:
             textfont=dict(color='white',size=11,family='Arial Black'), name='Female',
             hovertemplate='Age %{x} | Female: %{text}<extra></extra>'
         ))
-        fig_bubble.update_layout(**dark_layout(height=280),
-            title='Male (top row) vs Female (bottom row) per Age', title_font_size=12)
+        fig_bubble.update_layout(**dark_layout(height=520, margin=dict(l=40, r=20, t=50, b=80)), title='Male (top row) vs Female (bottom row) per Age', title_font_size=12, dragmode='zoom')
         fig_bubble.update_xaxes(title='Age', tickvals=list(range(18,26)))
-        fig_bubble.update_yaxes(visible=False, range=[0.4,1.6])
-        st.plotly_chart(fig_bubble, use_container_width=True)
+        fig_bubble.update_yaxes(visible=False, range=[0.2,1.8])
+        st.plotly_chart(fig_bubble, use_container_width=True, config=PLOTLY_CONFIG)
 
     with col_right:
         st.markdown("#### ⚤ Sex Split")
@@ -374,9 +432,11 @@ with tab1:
                     x=x_range, y=np.polyval(z, x_range), mode='lines',
                     name=f'{gender} trend', line=dict(color=color,width=2,dash='dash'), showlegend=False
                 ))
-        fig_sc.update_layout(**dark_layout(height=300))
+        fig_sc.update_layout(**dark_layout(height=300), dragmode='zoom')
+        # ensure the x-axis shows each age from 18 through 25 (add 25 after 24)
+        fig_sc.update_xaxes(tickmode='array', tickvals=list(range(18, 26)))
         fig_sc.update_traces(marker=dict(size=10,line=dict(width=1,color='white')), selector=dict(mode='markers'))
-        st.plotly_chart(fig_sc, use_container_width=True)
+        st.plotly_chart(fig_sc, use_container_width=True, config=PLOTLY_CONFIG)
 
     st.divider()
     st.markdown("#### 🌡️ Score Heatmap — Age Group × Gender")
